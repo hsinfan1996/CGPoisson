@@ -49,7 +49,7 @@ class Poisson2D(PDE):
         self.device = device
 
         # Change to GPU
-        self.x = torch.linspace(0, self.L * (1 - 1 / self.N), self.N, device=self.device)
+        self.x = torch.linspace(0, self.L * (1 - 1 / self.N), self.N, device=device)
         self.dx = self.L / self.N
         self.x += self.dx / 2
 
@@ -85,11 +85,11 @@ class Poisson2D(PDE):
         self.err = torch.norm(self.u[1:-1, 1:-1] - u_old[1:-1, 1:-1], p=1) / self.N**2
 
     def _scheme_GS(self):
-        u_old = self.u.clone()  
+        u_old = self.u.clone()
 
         for i in range(1, self.N+1):
             for j in range(1, self.N+1):
-                
+
                 self.u[i, j] = (self.u[i+1, j] + self.u[i-1, j] +
                                 self.u[i, j+1] + self.u[i, j-1] -
                                 self.source[i, j] * self.dx**2) / 4
@@ -109,8 +109,7 @@ class Poisson2D(PDE):
 
     def _scheme_CG(self):
         # Define A for calculation
-        def A(u):
-            return (u[2:, 1:-1] + u[:-2, 1:-1] + u[1:-1, 2:] + u[1:-1, :-2] - 4 * u[1:-1, 1:-1]) / self.dx**2
+        A = self._CG_update
 
         r = self.source.clone()
         r[1:-1, 1:-1] -= A(self.u)
@@ -119,7 +118,7 @@ class Poisson2D(PDE):
 
         for _ in range(self.N**2):
             Ad = torch.zeros_like(self.u)
-            Ad[1:-1, 1:-1] = A(d)  
+            Ad[1:-1, 1:-1] = A(d)
             alpha_num = torch.sum(r[1:-1, 1:-1]**2)
             alpha_den = torch.sum(d[1:-1, 1:-1] * Ad[1:-1, 1:-1])
             alpha = alpha_num / alpha_den if alpha_den != 0 else 0
@@ -139,27 +138,8 @@ class Poisson2D(PDE):
             if self.err < 1e-12:
                 break
 
-
-
-    def run(self, scheme, BC, source=None, steps=None, terminate=1e-15, print_err=False, **kwargs):
-        self._set_scheme(scheme)
-        self._set_boundary_cond(BC=BC)
-        self._set_source(source=source)
-
-        self.steps = 0
-        self.err = 1.
-
-        if steps is None:
-            while self.err > terminate:
-                self._scheme(**kwargs)
-                if print_err:
-                    print(self.err)
-        else:
-            for _ in range(steps):
-                self._scheme(**kwargs)
-                if print_err:
-                    print(self.err)
-
+    def _CG_update(self, u):
+        return (u[2:, 1:-1] + u[:-2, 1:-1] + u[1:-1, 2:] + u[1:-1, :-2] - 4 * u[1:-1, 1:-1]) / self.dx**2
 
 
 # Run this file directly to validate against demo
