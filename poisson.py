@@ -109,7 +109,8 @@ class Poisson2D(PDE):
 
     def _scheme_CG(self):
         # Define A for calculation
-        A = self._CG_update
+        def A(u):
+            return (u[2:, 1:-1] + u[:-2, 1:-1] + u[1:-1, 2:] + u[1:-1, :-2] - 4 * u[1:-1, 1:-1]) / self.dx**2
 
         r = self.source.clone()
         r[1:-1, 1:-1] -= A(self.u)
@@ -137,9 +138,6 @@ class Poisson2D(PDE):
             self.err = torch.norm(r[1:-1, 1:-1], p=np.inf)
             if self.err < 1e-12:
                 break
-
-    def _CG_update(self, u):
-        return (u[2:, 1:-1] + u[:-2, 1:-1] + u[1:-1, 2:] + u[1:-1, :-2] - 4 * u[1:-1, 1:-1]) / self.dx**2
 
 
 # Run this file directly to validate against demo
