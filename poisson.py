@@ -130,28 +130,24 @@ class Poisson2D(PDE):
         d = r.clone()
         u_new = self.u.clone()
 
+        Ad = torch.zeros_like(self.u)
+        Ad[1:-1, 1:-1] = A(d)
+        alpha_num = torch.sum(r[1:-1, 1:-1]**2)
+        alpha_den = torch.sum(d[1:-1, 1:-1] * Ad[1:-1, 1:-1])
+        alpha = alpha_num / alpha_den if alpha_den != 0 else 0
 
-        for _ in range(self.N**2):
-            Ad = torch.zeros_like(self.u)
-            Ad[1:-1, 1:-1] = A(d)
-            alpha_num = torch.sum(r[1:-1, 1:-1]**2)
-            alpha_den = torch.sum(d[1:-1, 1:-1] * Ad[1:-1, 1:-1])
-            alpha = alpha_num / alpha_den if alpha_den != 0 else 0
+        u_new[1:-1, 1:-1] += alpha * d[1:-1, 1:-1]
+        r_new = r.clone()
+        r_new[1:-1, 1:-1] = r[1:-1, 1:-1] - alpha * Ad[1:-1, 1:-1]
+        beta_num = torch.sum(r_new[1:-1, 1:-1]**2)
+        beta_den = torch.sum(r[1:-1, 1:-1]**2)
+        beta = beta_num / beta_den if beta_den != 0 else 0
 
-            u_new[1:-1, 1:-1] += alpha * d[1:-1, 1:-1]
-            r_new = r.clone()
-            r_new[1:-1, 1:-1] = r[1:-1, 1:-1] - alpha * Ad[1:-1, 1:-1]
-            beta_num = torch.sum(r_new[1:-1, 1:-1]**2)
-            beta_den = torch.sum(r[1:-1, 1:-1]**2)
-            beta = beta_num / beta_den if beta_den != 0 else 0
-
-            d[1:-1, 1:-1] = r_new[1:-1, 1:-1] + beta * d[1:-1, 1:-1]
-            self.u, r = u_new, r_new
+        d[1:-1, 1:-1] = r_new[1:-1, 1:-1] + beta * d[1:-1, 1:-1]
+        self.u, r = u_new, r_new
 
 
-            self.err = torch.norm(r[1:-1, 1:-1], p=np.inf)
-            if self.err < 1e-12:
-                break
+        self.err = torch.norm(r[1:-1, 1:-1], p=np.inf)
 
 
     def _scheme_CG_CPU(self):
@@ -164,35 +160,32 @@ class Poisson2D(PDE):
         d = np.copy(r)  # Direction vector
         u_new = np.copy(self.u)  # New solution vector
 
-        for k in range(self.N**2):
-            # Calculate alpha
-            alpha_num = np.sum(r[1:-1, 1:-1] * r[1:-1, 1:-1])
-            alpha_den = np.sum([d[i, j] * A(d, i, j) for i in range(1, self.N+1) for j in range(1, self.N+1)])
-            alpha = alpha_num / alpha_den if alpha_den != 0 else 0  # to avoid division by zero
+        # Calculate alpha
+        alpha_num = np.sum(r[1:-1, 1:-1] * r[1:-1, 1:-1])
+        alpha_den = np.sum([d[i, j] * A(d, i, j) for i in range(1, self.N+1) for j in range(1, self.N+1)])
+        alpha = alpha_num / alpha_den if alpha_den != 0 else 0  # to avoid division by zero
 
-            # Update solution
-            u_new[1:-1, 1:-1] += alpha * d[1:-1, 1:-1]
+        # Update solution
+        u_new[1:-1, 1:-1] += alpha * d[1:-1, 1:-1]
 
-            # Calculate new residual
-            r_new = np.zeros_like(r)
-            r_new[1:-1, 1:-1] = r[1:-1, 1:-1] - alpha * np.array([[A(d, i, j) for j in range(1, self.N+1)] for i in range(1, self.N+1)])
+        # Calculate new residual
+        r_new = np.zeros_like(r)
+        r_new[1:-1, 1:-1] = r[1:-1, 1:-1] - alpha * np.array([[A(d, i, j) for j in range(1, self.N+1)] for i in range(1, self.N+1)])
 
-            # Calculate beta
-            beta_num = np.sum(r_new[1:-1, 1:-1] * r_new[1:-1, 1:-1])
-            beta_den = np.sum(r[1:-1, 1:-1] * r[1:-1, 1:-1])
-            beta = beta_num / beta_den if beta_den != 0 else 0  # to avoid division by zero
+        # Calculate beta
+        beta_num = np.sum(r_new[1:-1, 1:-1] * r_new[1:-1, 1:-1])
+        beta_den = np.sum(r[1:-1, 1:-1] * r[1:-1, 1:-1])
+        beta = beta_num / beta_den if beta_den != 0 else 0  # to avoid division by zero
 
-            # Update direction vector
-            d[1:-1, 1:-1] = r_new[1:-1, 1:-1] + beta * d[1:-1, 1:-1]
+        # Update direction vector
+        d[1:-1, 1:-1] = r_new[1:-1, 1:-1] + beta * d[1:-1, 1:-1]
 
-            # Update the old residual and solution
-            r = np.copy(r_new)
-            self.u = np.copy(u_new)
+        # Update the old residual and solution
+        r = np.copy(r_new)
+        self.u = np.copy(u_new)
 
-            # Check for convergence
-            self.err = np.linalg.norm(r[1:-1, 1:-1], ord=np.inf)
-            if self.err < 1e-12:  # Termination condition
-                break
+        # Check for convergence
+        self.err = np.linalg.norm(r[1:-1, 1:-1], ord=np.inf)
 
 
 # Run this file directly to validate against demo
