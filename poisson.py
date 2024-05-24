@@ -9,8 +9,8 @@ import torch
 class PDE:
     def _evolve(self,*, print_err, **kwargs):
         self._scheme(**kwargs)
-
         self.steps += 1
+
         if print_err:
             print(self.err)
 
@@ -81,6 +81,8 @@ class Poisson2D(PDE):
             self._scheme = self._scheme_SOR
         elif scheme == "CG":
             self._scheme = self._scheme_CG
+        elif scheme == "CG-CPU":
+            self._scheme = self._scheme_CG_CPU
         else:
             raise ValueError("No scheme found")
 
@@ -120,35 +122,77 @@ class Poisson2D(PDE):
 
     def _scheme_CG(self):
         # Define A for calculation
-        A = self._CG_update
+        def A(u):
+            return (u[2:, 1:-1] + u[:-2, 1:-1] + u[1:-1, 2:] + u[1:-1, :-2] - 4 * u[1:-1, 1:-1]) / self.dx**2
 
         r = self.source.clone()
         r[1:-1, 1:-1] -= A(self.u)
         d = r.clone()
         u_new = self.u.clone()
 
-        Ad = torch.zeros_like(self.u)
-        Ad[1:-1, 1:-1] = A(d)
-        alpha_num = torch.sum(r[1:-1, 1:-1]**2)
-        alpha_den = torch.sum(d[1:-1, 1:-1] * Ad[1:-1, 1:-1])
-        alpha = alpha_num / alpha_den if alpha_den != 0 else 0
 
-        u_new[1:-1, 1:-1] += alpha * d[1:-1, 1:-1]
-        r_new = r.clone()
-        r_new[1:-1, 1:-1] = r[1:-1, 1:-1] - alpha * Ad[1:-1, 1:-1]
-        beta_num = torch.sum(r_new[1:-1, 1:-1]**2)
-        beta_den = torch.sum(r[1:-1, 1:-1]**2)
-        beta = beta_num / beta_den if beta_den != 0 else 0
+        for _ in range(self.N**2):
+            Ad = torch.zeros_like(self.u)
+            Ad[1:-1, 1:-1] = A(d)
+            alpha_num = torch.sum(r[1:-1, 1:-1]**2)
+            alpha_den = torch.sum(d[1:-1, 1:-1] * Ad[1:-1, 1:-1])
+            alpha = alpha_num / alpha_den if alpha_den != 0 else 0
 
-        d[1:-1, 1:-1] = r_new[1:-1, 1:-1] + beta * d[1:-1, 1:-1]
-        self.u, r = u_new, r_new
+            u_new[1:-1, 1:-1] += alpha * d[1:-1, 1:-1]
+            r_new = r.clone()
+            r_new[1:-1, 1:-1] = r[1:-1, 1:-1] - alpha * Ad[1:-1, 1:-1]
+            beta_num = torch.sum(r_new[1:-1, 1:-1]**2)
+            beta_den = torch.sum(r[1:-1, 1:-1]**2)
+            beta = beta_num / beta_den if beta_den != 0 else 0
+
+            d[1:-1, 1:-1] = r_new[1:-1, 1:-1] + beta * d[1:-1, 1:-1]
+            self.u, r = u_new, r_new
 
 
-        self.err = torch.norm(r[1:-1, 1:-1], p=np.inf)
+            self.err = torch.norm(r[1:-1, 1:-1], p=np.inf)
+            if self.err < 1e-12:
+                break
 
 
-    def _CG_update(self, u):
-        return (u[2:, 1:-1] + u[:-2, 1:-1] + u[1:-1, 2:] + u[1:-1, :-2] - 4 * u[1:-1, 1:-1]) / self.dx**2
+    def _scheme_CG_CPU(self):
+        A = lambda u, i, j: (u[i+1, j] + u[i-1, j] + u[i, j+1] + u[i, j-1] - 4 * u[i, j]) / self.dx**2
+
+        # Initialize the source term and solution vectors
+        r = np.zeros_like(self.u)  # Residual
+        r[1:-1, 1:-1] = self.source[1:-1, 1:-1] - np.array([[A(self.u, i, j) for j in range(1, self.N+1)] for i in range(1, self.N+1)])
+
+        d = np.copy(r)  # Direction vector
+        u_new = np.copy(self.u)  # New solution vector
+
+        for k in range(self.N**2):
+            # Calculate alpha
+            alpha_num = np.sum(r[1:-1, 1:-1] * r[1:-1, 1:-1])
+            alpha_den = np.sum([d[i, j] * A(d, i, j) for i in range(1, self.N+1) for j in range(1, self.N+1)])
+            alpha = alpha_num / alpha_den if alpha_den != 0 else 0  # to avoid division by zero
+
+            # Update solution
+            u_new[1:-1, 1:-1] += alpha * d[1:-1, 1:-1]
+
+            # Calculate new residual
+            r_new = np.zeros_like(r)
+            r_new[1:-1, 1:-1] = r[1:-1, 1:-1] - alpha * np.array([[A(d, i, j) for j in range(1, self.N+1)] for i in range(1, self.N+1)])
+
+            # Calculate beta
+            beta_num = np.sum(r_new[1:-1, 1:-1] * r_new[1:-1, 1:-1])
+            beta_den = np.sum(r[1:-1, 1:-1] * r[1:-1, 1:-1])
+            beta = beta_num / beta_den if beta_den != 0 else 0  # to avoid division by zero
+
+            # Update direction vector
+            d[1:-1, 1:-1] = r_new[1:-1, 1:-1] + beta * d[1:-1, 1:-1]
+
+            # Update the old residual and solution
+            r = np.copy(r_new)
+            self.u = np.copy(u_new)
+
+            # Check for convergence
+            self.err = np.linalg.norm(r[1:-1, 1:-1], ord=np.inf)
+            if self.err < 1e-12:  # Termination condition
+                break
 
 
 # Run this file directly to validate against demo
