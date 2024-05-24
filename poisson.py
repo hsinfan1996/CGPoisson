@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # coding: utf-8
-
+import warnings
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import animation
@@ -9,10 +9,8 @@ import torch
 class PDE:
     def _evolve(self,*, print_err, **kwargs):
         self._scheme(**kwargs)
-
-        #self.u_ref = self.ref_func(self.x, self.x)
-
         self.steps += 1
+
         if print_err:
             print(self.err)
 
@@ -39,30 +37,40 @@ class PDE:
                 self._evolve(print_err=print_err, **kwargs)
 
 
-
-
 class Poisson2D(PDE):
-    def __init__(self, L=1.0, N=100, device='cuda'):
+    def __init__(self, L=1.0, N=100, device="cuda"):
         self.name = "Poisson2D"
         self.L = L
         self.N = N
-        self.device = device
 
-        # Change to GPU
-        self.x = torch.linspace(0, self.L * (1 - 1 / self.N), self.N, device=device)
+        self._set_device(device)
+
+        self.x = torch.linspace(0, self.L * (1 - 1 / self.N), self.N, device=self.device)
         self.dx = self.L / self.N
         self.x += self.dx / 2
 
-        self.u = torch.zeros((self.N+2, self.N+2), dtype=torch.float, device=device)
-        self.source = torch.zeros((self.N+2, self.N+2), dtype=torch.float, device=device)
+        self.u = torch.zeros((self.N+2, self.N+2), dtype=torch.float, device=self.device)
+        self.source = torch.zeros((self.N+2, self.N+2), dtype=torch.float, device=self.device)
+
+
+    def _set_device(self, device):
+        if not torch.cuda.is_available():
+            if device!="cpu":
+                warnings.warn("Fall back to cpu for PyTorch")
+            self.device = "cpu"
+        else:
+            self.device = "cuda"
+
 
     def _set_boundary_cond(self, BC):
         self.u = BC.clone().to(self.device)
         self.u[1:-1, 1:-1] = torch.zeros((self.N, self.N), dtype=torch.float, device=self.device)
 
+
     def _set_source(self, source):
         if source is not None:
             self.source[1:-1, 1:-1] = source.to(self.device)
+
 
     def _set_scheme(self, scheme):
         if scheme == "Jacobi":
@@ -78,6 +86,7 @@ class Poisson2D(PDE):
         else:
             raise ValueError("No scheme found")
 
+
     def _scheme_Jacobi(self):
         u_old = self.u.clone()
         self.u[1:-1, 1:-1] = (u_old[2:, 1:-1] + u_old[:-2, 1:-1] +
@@ -85,6 +94,7 @@ class Poisson2D(PDE):
                                self.source[1:-1, 1:-1] * self.dx**2) / 4
 
         self.err = torch.norm(self.u[1:-1, 1:-1] - u_old[1:-1, 1:-1], p=1) / self.N**2
+
 
     def _scheme_GS(self):
         u_old = self.u.clone()
@@ -109,6 +119,7 @@ class Poisson2D(PDE):
                                                              self.source[i, j] * self.dx**2)
         self.err = torch.norm(self.u - u_old, p=1) / self.N**2
 
+
     def _scheme_CG(self):
         # Define A for calculation
         def A(u):
@@ -118,6 +129,7 @@ class Poisson2D(PDE):
         r[1:-1, 1:-1] -= A(self.u)
         d = r.clone()
         u_new = self.u.clone()
+
 
         for _ in range(self.N**2):
             Ad = torch.zeros_like(self.u)
@@ -181,6 +193,7 @@ class Poisson2D(PDE):
             self.err = np.linalg.norm(r[1:-1, 1:-1], ord=np.inf)
             if self.err < 1e-12:  # Termination condition
                 break
+
 
 # Run this file directly to validate against demo
 if __name__ == "__main__":
