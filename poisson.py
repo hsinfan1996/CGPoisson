@@ -128,7 +128,6 @@ class Poisson2D(PDE):
         r = self.source.clone()
         r[1:-1, 1:-1] -= A(self.u)
         d = r.clone()
-        u_new = self.u.clone()
 
         Ad = torch.zeros_like(self.u)
         Ad[1:-1, 1:-1] = A(d)
@@ -136,15 +135,13 @@ class Poisson2D(PDE):
         alpha_den = torch.sum(d[1:-1, 1:-1] * Ad[1:-1, 1:-1])
         alpha = alpha_num / alpha_den if alpha_den != 0 else 0
 
-        u_new[1:-1, 1:-1] += alpha * d[1:-1, 1:-1]
-        r_new = r.clone()
-        r_new[1:-1, 1:-1] = r[1:-1, 1:-1] - alpha * Ad[1:-1, 1:-1]
-        beta_num = torch.sum(r_new[1:-1, 1:-1]**2)
-        beta_den = torch.sum(r[1:-1, 1:-1]**2)
+        self.u[1:-1, 1:-1] += alpha * d[1:-1, 1:-1]
+        r[1:-1, 1:-1] -= alpha * Ad[1:-1, 1:-1]
+        beta_num = torch.sum(r[1:-1, 1:-1]**2)
+        beta_den = alpha_num
         beta = beta_num / beta_den if beta_den != 0 else 0
+        d[1:-1, 1:-1] = r[1:-1, 1:-1] + beta * d[1:-1, 1:-1]
 
-        d[1:-1, 1:-1] = r_new[1:-1, 1:-1] + beta * d[1:-1, 1:-1]
-        self.u, r = u_new, r_new
 
         self.err = torch.norm(r[1:-1, 1:-1], p=np.inf)
 
