@@ -29,7 +29,7 @@ int main(int argc, char* argv[]){
     file_in.seekg(0);
 
     if (N_grid_in/N_in != N_in || N_grid_in%N_in != 0){
-        cerr<<"Not szquare matrix"<<endl;
+        cerr<<"Not a square matrix"<<endl;
         return 2;
     }
 
