@@ -1,66 +1,54 @@
 #include <cmath>
 #include <cstdio>
 #include <fstream>
+#include <iostream>
+#include <iterator>
 #include <string>
 
 #include <omp.h>
 
 
-double ref_func(double x, double y){
-    return y*(1-y)*pow(x, 3);
-}
+using namespace std;
 
-double source_term(double x, double y){
-    return 6*x*y*(1-y)-2*pow(x, 3);
-}
 
 int main(int argc, char* argv[]){
 
-    int N_in;
-    if(argc>=2) N_in=atof(argv[1]);
-    else N_in=100;
+    ifstream file_in;
+    double dx, terminate=1e-12;
 
-    const int N=N_in, N_grid=(N_in+2)*(N_in+2);
-    double L=1.0;
-    double terminate=1e-12;
+    file_in.open(argv[1]);
+    dx=atof(argv[2]);
+    if(argc>=4){
+        terminate=atof(argv[3]);;
+    }
 
-    double dx=L/N;
-    double x[N+2] {0};
-    x[N+1]=L;
-    double u[N_grid] {0};
-    double source[N_grid] {0}, ref[N_grid] {0};
+    size_t N_grid_in=distance(istream_iterator<double>(file_in), istream_iterator<double>{});
+    size_t N_in = ((int) sqrt(N_grid_in));
+
+    file_in.clear();
+    file_in.seekg(0);
+
+    if (N_grid_in/N_in != N_in || N_grid_in%N_in != 0){
+        cerr<<"Not szquare matrix"<<endl;
+        return 2;
+    }
+
+
+    const int N=N_in-2, N_grid=N_grid_in;
+    double u[N_grid] {0}, source[N_grid] {0};
+
+    for (int i=0; i<N_grid; i++){
+        file_in >> source[i];
+        //printf("%6e\n", source[i]);
+    }
 
     for(int i=1; i<N+1; i++){
-        x[i] = (i-0.5)*dx;
+        u[i] = source[i];
+        u[(N+1)*(N+2)+i] = source[(N+1)*(N+2)+i];
+        u[(i)*(N+2)] = source[(i)*(N+2)];
+        u[(i)*(N+2)+N+1] = source[(i)*(N+2)+N+1];
         //printf("%6e\n", x[i]);
     }
-
-    // boundary condition
-    for(int j=1; j<N+1; j++){
-        u[(N+1)*(N+2)+j] = x[j]*(1-x[j]);
-        //printf("%3e\n", u[N+1][j]);
-    }
-
-    for(int i=1; i<N+1; i++){
-        for(int j=1; j<N+1; j++){
-            source[i*(N+2)+j] = source_term(x[i], x[j]);
-            //ref[i*(N+2)+j] = ref_func(x[i], x[j]);
-        }
-    }
-
-    /*
-    FILE *init_out;
-    std::string init_fname("init_");
-    init_fname.append(std::to_string(N));
-    init_fname.append(".txt");
-    init_out = fopen(init_fname.data(), "w");
-    for(int i=0; i<N_grid; i++){
-        //printf("%.18f ", d[i]);
-        fprintf(init_out, "%.18f ", u[i]);
-    }
-    fclose(init_out);
-    */
-
 
     double err, err_max;
     int iters=0;
