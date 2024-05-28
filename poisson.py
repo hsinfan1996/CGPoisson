@@ -125,25 +125,26 @@ class Poisson2D(PDE):
         def A(u):
             return (u[2:, 1:-1] + u[:-2, 1:-1] + u[1:-1, 2:] + u[1:-1, :-2] - 4 * u[1:-1, 1:-1]) / self.dx**2
 
-        r = self.source.clone()
-        r[1:-1, 1:-1] -= A(self.u)
-        d = r.clone()
+        if self.steps==0:
+            self.r = self.source.clone()
+            self.r[1:-1, 1:-1] -= A(self.u)
+            self.d = self.r.clone()
 
         Ad = torch.zeros_like(self.u)
-        Ad[1:-1, 1:-1] = A(d)
-        alpha_num = torch.sum(r[1:-1, 1:-1]**2)
-        alpha_den = torch.sum(d[1:-1, 1:-1] * Ad[1:-1, 1:-1])
+        Ad[1:-1, 1:-1] = A(self.d)
+
+        alpha_num = torch.sum(self.r[1:-1, 1:-1]**2)
+        alpha_den = torch.sum(self.d[1:-1, 1:-1] * Ad[1:-1, 1:-1])
         alpha = alpha_num / alpha_den if alpha_den != 0 else 0
 
-        self.u[1:-1, 1:-1] += alpha * d[1:-1, 1:-1]
-        r[1:-1, 1:-1] -= alpha * Ad[1:-1, 1:-1]
-        beta_num = torch.sum(r[1:-1, 1:-1]**2)
+        self.u[1:-1, 1:-1] += alpha * self.d[1:-1, 1:-1]
+        self.r[1:-1, 1:-1] -= alpha * Ad[1:-1, 1:-1]
+        beta_num = torch.sum(self.r[1:-1, 1:-1]**2)
         beta_den = alpha_num
         beta = beta_num / beta_den if beta_den != 0 else 0
-        d[1:-1, 1:-1] = r[1:-1, 1:-1] + beta * d[1:-1, 1:-1]
+        self.d[1:-1, 1:-1] = self.r[1:-1, 1:-1] + beta * self.d[1:-1, 1:-1]
 
-
-        self.err = torch.norm(r[1:-1, 1:-1], p=np.inf)
+        self.err = torch.norm(self.r[1:-1, 1:-1], p=np.inf)/self.N**2
 
 
     def _scheme_CG_CPU(self):
@@ -181,20 +182,4 @@ class Poisson2D(PDE):
         self.u = np.copy(u_new)
 
         # Check for convergence
-        self.err = np.linalg.norm(r[1:-1, 1:-1], ord=np.inf)
-
-
-# Run this file directly to validate against demo
-if __name__ == "__main__":
-    periods = 2
-
-    adv = Poisson2D().run()
-    anim = adv.animation(periods, scheme="Lax-Wendroff", nstep_per_image=10)
-    #anim = adv.animation(periods, scheme="upwind", nstep_per_image=10)
-    plt.show()
-    print(f"{adv.t*adv.t_scale}, {adv.N}, {adv.err:.6e}")
-
-    dif = Poisson2D().run()
-    anim = dif.animation(periods, scheme="BTCS", nstep_per_image=10)
-    plt.show()
-    print(f"{dif.t/dif.t_scale}, {dif.N}, {dif.err:.6e}")
+        self.err = np.linalg.norm(r[1:-1, 1:-1], ord=np.inf)/self.N**2
