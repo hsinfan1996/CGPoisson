@@ -14,33 +14,42 @@ using namespace std;
 int main(int argc, char* argv[]){
 
     ifstream file_in;
-    double dx, terminate=1e-12;
+    double terminate=1e-12, L=1.0;
 
     file_in.open(argv[1]);
-    dx=atof(argv[2]);
-    if(argc>=4){
-        terminate=atof(argv[3]);;
+    if(argc>=3){
+        terminate=atof(argv[2]);
+        L=atof(argv[3]);
     }
 
-    size_t N_grid_in=distance(istream_iterator<double>(file_in), istream_iterator<double>{});
-    size_t N_in = ((int) sqrt(N_grid_in));
+    size_t N_grid_in, N_in;
+
+    if (file_in.fail()){
+        cerr<<"Failed to open file"<<endl;
+        return 2;
+    }
+    else{
+        N_grid_in=distance(istream_iterator<double>(file_in), istream_iterator<double>{});
+        N_in = ((int) sqrt(N_grid_in));
+    }
 
     file_in.clear();
     file_in.seekg(0);
 
     if (N_grid_in/N_in != N_in || N_grid_in%N_in != 0){
         cerr<<"Not a square matrix"<<endl;
-        return 2;
+        return 3;
     }
 
 
-    const int N=N_in-2, N_grid=N_grid_in;
+    const unsigned int N=N_in-2, N_grid=N_grid_in;
     double u[N_grid] {0}, source[N_grid] {0};
 
     for (int i=0; i<N_grid; i++){
         file_in >> source[i];
         //printf("%6e\n", source[i]);
     }
+    file_in.close();
 
     for(int i=1; i<N+1; i++){
         u[i] = source[i];
@@ -59,11 +68,12 @@ int main(int argc, char* argv[]){
     # pragma omp parallel for collapse(2)
     for(int i=1; i<N+1; i++){
         for(int j=1; j<N+1; j++){
-            residual[i*(N+2)+j] = source[i*(N+2)+j] -(u[(i+1)*(N+2)+j]
-                                            +u[(i-1)*(N+2)+j]
-                                            +u[i*(N+2)+j+1]
-                                            +u[i*(N+2)+j-1]
-                                            -4*u[i*(N+2)+j])/dx/dx;
+            residual[i*(N+2)+j] = source[i*(N+2)+j]
+                                  -(u[(i+1)*(N+2)+j]
+                                    +u[(i-1)*(N+2)+j]
+                                    +u[i*(N+2)+j+1]
+                                    +u[i*(N+2)+j-1]
+                                    -4*u[i*(N+2)+j])*N*N/L/L;
             d[i*(N+2)+j] = residual[i*(N+2)+j];
         }
     }
@@ -75,29 +85,32 @@ int main(int argc, char* argv[]){
         err=0;
         err_max=0;
 
+        # pragma omp parallel
+        {
         // compute Ad = A(d)
-        # pragma omp parallel for collapse(2)
+        # pragma omp for collapse(2)
         for(int i=1; i<N+1; i++){
             for(int j=1; j<N+1; j++){
                 Ad[i*(N+2)+j] = (d[(i+1)*(N+2)+j]
-                                +d[(i-1)*(N+2)+j]
-                                +d[i*(N+2)+j+1]
-                                +d[i*(N+2)+j-1]
-                                -4*d[i*(N+2)+j])/dx/dx;
+                                 +d[(i-1)*(N+2)+j]
+                                 +d[i*(N+2)+j+1]
+                                 +d[i*(N+2)+j-1]
+                                 -4*d[i*(N+2)+j])*N*N/L/L;
             }
         }
         // alpha = r*r/d*Ad
-        # pragma omp parallel for collapse(2) reduction(+:alpha_num, alpha_den)
+        # pragma omp for collapse(2) reduction(+:alpha_num, alpha_den)
         for(int i=1; i<N+1; i++){
             for(int j=1; j<N+1; j++){
                 alpha_num += residual[i*(N+2)+j]*residual[i*(N+2)+j];
                 alpha_den += d[i*(N+2)+j]*Ad[i*(N+2)+j];
             }
         }
+        # pragma omp single
         alpha = alpha_den!=0 ? alpha_num / alpha_den : 0;
 
 
-        # pragma omp parallel for collapse(2) reduction(+:beta_num)
+        # pragma omp for collapse(2) reduction(+:beta_num)
         for(int i=1; i<N+1; i++){
             for(int j=1; j<N+1; j++){
                 u[i*(N+2)+j] += alpha*d[i*(N+2)+j];
@@ -105,23 +118,23 @@ int main(int argc, char* argv[]){
                 beta_num += residual[i*(N+2)+j]*residual[i*(N+2)+j];
             }
         }
+        # pragma omp single
         beta = beta_num/alpha_num;
 
-        # pragma omp parallel for collapse(2) reduction(+:err) reduction(max:err_max)
+        # pragma omp for collapse(2) reduction(+:err) reduction(max:err_max)
         for(int i=1; i<N+1; i++){
             for(int j=1; j<N+1; j++){
                 d[i*(N+2)+j] = residual[i*(N+2)+j] + beta*d[i*(N+2)+j];
                 err += fabs(residual[i*(N+2)+j]);
-                //err += fabs(residual[i][j]/ref[i][j]);
                 err_max = fabs(residual[i*(N+2)+j]) > err_max ? fabs(residual[i*(N+2)+j]) : err_max;
             }
         }
-
+        }
         err /= N*N;
         iters++;
 
     }while(err>terminate);
-    printf("step %d, avg residual=%6e, max residual=%6e\n", iters, err, err_max);
+    printf("%d iterations, avg residual=%6e, max residual=%6e\n", iters, err, err_max);
 
     FILE *file_out;
     std::string buf("output_");
