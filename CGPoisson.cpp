@@ -43,7 +43,7 @@ int main(int argc, char* argv[]){
 
 
     const unsigned int N=N_in-2, N_grid=N_grid_in;
-    double u[N_grid] {0}, source[N_grid] {0}, dx=L/N;
+    double u[N_grid] {0}, source[N_grid] {0};
 
     for (int i=0; i<N_grid; i++){
         file_in >> source[i];
