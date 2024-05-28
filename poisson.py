@@ -154,7 +154,6 @@ class Poisson2D(PDE):
         r[1:-1, 1:-1] = self.source[1:-1, 1:-1] - np.array([[A(self.u, i, j) for j in range(1, self.N+1)] for i in range(1, self.N+1)])
 
         d = np.copy(r)  # Direction vector
-        u_new = np.copy(self.u)  # New solution vector
 
         # Calculate alpha
         alpha_num = np.sum(r[1:-1, 1:-1] * r[1:-1, 1:-1])
@@ -162,23 +161,21 @@ class Poisson2D(PDE):
         alpha = alpha_num / alpha_den if alpha_den != 0 else 0  # to avoid division by zero
 
         # Update solution
-        u_new[1:-1, 1:-1] += alpha * d[1:-1, 1:-1]
+        self.u[1:-1, 1:-1] += alpha * d[1:-1, 1:-1]
 
         # Calculate new residual
-        r_new = np.zeros_like(r)
-        r_new[1:-1, 1:-1] = r[1:-1, 1:-1] - alpha * np.array([[A(d, i, j) for j in range(1, self.N+1)] for i in range(1, self.N+1)])
+        r[1:-1, 1:-1] -= alpha * np.array([[A(d, i, j) for j in range(1, self.N+1)] for i in range(1, self.N+1)])
 
         # Calculate beta
         beta_num = np.sum(r_new[1:-1, 1:-1] * r_new[1:-1, 1:-1])
-        beta_den = np.sum(r[1:-1, 1:-1] * r[1:-1, 1:-1])
+        beta_den = alpha_num
         beta = beta_num / beta_den if beta_den != 0 else 0  # to avoid division by zero
 
         # Update direction vector
-        d[1:-1, 1:-1] = r_new[1:-1, 1:-1] + beta * d[1:-1, 1:-1]
+        d[1:-1, 1:-1] = r[1:-1, 1:-1] + beta * d[1:-1, 1:-1]
 
         # Update the old residual and solution
         r = np.copy(r_new)
-        self.u = np.copy(u_new)
 
         # Check for convergence
         self.err = np.linalg.norm(r[1:-1, 1:-1], ord=np.inf)
