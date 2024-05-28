@@ -193,4 +193,4 @@ class Poisson2D(PDE):
         self.d[1:-1, 1:-1] = self.r[1:-1, 1:-1] + beta * self.d[1:-1, 1:-1]
 
         # Check for convergence
-        self.err = np.linalg.norm(self.r[1:-1, 1:-1], ord=np.inf)/self.N**2
+        self.err = np.abs(self.r[1:-1, 1:-1]).sum()/self.N**2
