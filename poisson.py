@@ -23,13 +23,13 @@ class PDE:
         IC: initial condition
         """
         self._set_scheme(scheme)
-        if self.scheme == "CG":
-            self.x = torch.from_numpy(self.x)
-            self.u = torch.from_numpy(self.u)
-            self.source = torch.from_numpy(self.source)
 
         self._set_boundary_cond(BC=BC)
         self._set_source(source=source)
+        if self.scheme == "CG":
+            self.x = torch.from_numpy(self.x).to(self.device)
+            self.u = torch.from_numpy(self.u).to(self.device)
+            self.source = torch.from_numpy(self.source).to(self.device)
 
         self.steps = 0
         self.err = 1.
@@ -40,6 +40,12 @@ class PDE:
         else:
             for step in range(steps):
                 self._evolve(print_err=print_err, **kwargs)
+
+        if self.scheme == "CG":
+            self.x = self.x.cpu().numpy()
+            self.u = self.u.cpu().numpy()
+            self.source = self.source.cpu().numpy()
+            self.err = self.err.cpu().numpy()
 
 
 class Poisson2D(PDE):
@@ -58,29 +64,35 @@ class Poisson2D(PDE):
 
 
     def _set_device(self, device):
-        if not torch.cuda.is_available():
-            if device!="cpu":
+        if device=="cuda":
+            if torch.cuda.is_available():
+                self.device = "cuda"
+            else:
                 warnings.warn("Fall back to cpu for PyTorch")
-            self.device = "cpu"
+                self.device = "cpu"
         else:
-            self.device = "cuda"
+            self.device = "cpu"
 
 
     def _set_boundary_cond(self, BC):
-        if self.scheme == "CG":
-            self.u = BC.clone().to(self.device)
+        '''
+        if self.device == "cuda":
+            self.u = torch.from_numpy(BC).to(self.device)
             self.u[1:-1, 1:-1] = torch.zeros((self.N, self.N), dtype=torch.float, device=self.device)
         else:
-            self.u = BC
-            self.u[1:-1, 1:-1] = np.zeros((self.N, self.N))
+        '''
+        self.u = BC
+        self.u[1:-1, 1:-1] = np.zeros((self.N, self.N))
 
 
     def _set_source(self, source):
         if source is not None:
-            if self.scheme == "CG":
-                self.source[1:-1, 1:-1] = source.to(self.device)
+            '''
+            if self.device == "cuda":
+                self.source[1:-1, 1:-1] = torch.from_numpy(source).to(self.device)
             else:
-                self.source[1:-1, 1:-1] = source
+            '''
+            self.source[1:-1, 1:-1] = source
 
 
     def _set_scheme(self, scheme):
@@ -97,6 +109,7 @@ class Poisson2D(PDE):
              self.scheme = "CG"
              self._scheme = self._scheme_CG
          elif scheme == "CG-CPU":
+             self._set_device("cpu")
              self.scheme = "CG-CPU"
              self._scheme = self._scheme_CG_CPU
          else:
