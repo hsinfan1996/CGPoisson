@@ -122,11 +122,11 @@ class Poisson2D(PDE):
                                u_old[1:-1, 2:] + u_old[1:-1, :-2] -
                                self.source[1:-1, 1:-1] * self.dx**2) / 4
 
-        self.err = torch.norm(self.u[1:-1, 1:-1] - u_old[1:-1, 1:-1], p=1) / self.N**2
+        self.err = np.abs(self.u[1:-1, 1:-1] - u_old[1:-1, 1:-1]).sum() / self.N**2
 
 
     def _scheme_GS(self):
-        u_old = self.u.clone()
+        u_old = self.u.copy()
 
         for i in range(1, self.N+1):
             for j in range(1, self.N+1):
@@ -136,11 +136,11 @@ class Poisson2D(PDE):
                                 self.source[i, j] * self.dx**2) / 4
 
 
-        self.err = torch.norm(self.u[1:-1, 1:-1] - u_old[1:-1, 1:-1], p=1) / self.N**2
+        self.err = np.abs(self.u[1:-1, 1:-1] - u_old[1:-1, 1:-1]).sum() / self.N**2
 
 
     def _scheme_SOR(self, w=1.0):
-        u_old = self.u.clone()
+        u_old = self.u.copy()
         for i in range(1, self.N+1):
             for j in range(1, self.N+1):
                 self.u[i, j] = (1 - w) * u_old[i, j] + w/4 * (self.u[i+1, j] + self.u[i-1, j] +
