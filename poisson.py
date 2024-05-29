@@ -139,7 +139,7 @@ class Poisson2D(PDE):
         self.err = np.abs(self.u[1:-1, 1:-1] - u_old[1:-1, 1:-1]).sum() / self.N**2
 
 
-    def _scheme_SOR(self, w=1.0):
+    def _scheme_SOR(self, w=1.85):
         u_old = self.u.copy()
         for i in range(1, self.N+1):
             for j in range(1, self.N+1):
