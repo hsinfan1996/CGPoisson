@@ -146,7 +146,7 @@ class Poisson2D(PDE):
                 self.u[i, j] = (1 - w) * u_old[i, j] + w/4 * (self.u[i+1, j] + self.u[i-1, j] +
                                                              self.u[i, j+1] + self.u[i, j-1] -
                                                              self.source[i, j] * self.dx**2)
-        self.err = torch.norm(self.u - u_old, p=1) / self.N**2
+        self.err = np.abs(self.u[1:-1, 1:-1] - u_old[1:-1, 1:-1]).sum() / self.N**2
 
 
     def _scheme_CG(self):
