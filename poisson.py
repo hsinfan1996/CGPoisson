@@ -135,7 +135,7 @@ class Poisson2D(PDE):
 
         self.err = np.linalg.norm(self.u[1:-1, 1:-1] - u_old[1:-1, 1:-1], ord=1) / self.N**2
 
-    def _scheme_SOR(self, w=1.8):
+    def _scheme_SOR(self, w=1.0):
         u_old = self.u.copy()
         for i in range(1, self.N+1):
             for j in range(1, self.N+1):
@@ -169,7 +169,7 @@ class Poisson2D(PDE):
         beta = beta_num / beta_den if beta_den != 0 else 0
         self.d[1:-1, 1:-1] = self.r[1:-1, 1:-1] + beta * self.d[1:-1, 1:-1]
 
-        self.err = torch.norm(self.r[1:-1, 1:-1], p=np.inf)/self.N**2
+        self.err = torch.norm(self.r[1:-1, 1:-1], p=1)/self.N**2
 
 
     def _scheme_CG_CPU(self):
@@ -203,4 +203,3 @@ class Poisson2D(PDE):
 
         # Check for convergence
         self.err = np.abs(self.r[1:-1, 1:-1]).sum()/self.N**2
-
