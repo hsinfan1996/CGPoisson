@@ -117,7 +117,7 @@ class Poisson2D(PDE):
 
 
     def _scheme_Jacobi(self):
-        u_old = self.u.clone()
+        u_old = self.u.copy()
         self.u[1:-1, 1:-1] = (u_old[2:, 1:-1] + u_old[:-2, 1:-1] +
                                u_old[1:-1, 2:] + u_old[1:-1, :-2] -
                                self.source[1:-1, 1:-1] * self.dx**2) / 4
