@@ -63,7 +63,7 @@ This Python script provides an implementation of solving Poisson equations using
 To get started with this repository, clone it to your local machine:
 
 ```sh
-git clone https://github.com/yourusername/your-repo-name.git
+git clone https://github.com/hsinfan1996/CGPossion.git
 ```
 
 Ensure you have the necessary dependencies installed. For the Python components, you can create a virtual environment and install the required packages:
