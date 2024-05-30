@@ -1,9 +1,14 @@
 # CGPoisson
-NTU - AsPhys8030
 
 ## Introduction
 
-This repository contains implementations and demonstrations of solving Poisson equations using various computational methods. The main components include a C++ implementation for solving Poisson equations using the Conjugate Gradient method, a Python script for similar computations, and a Jupyter Notebook demonstrating the use of PyTorch for solving Poisson equations.
+This repository is the final project for the AsPhys8030 course at National Taiwan University (NTU). It showcases various computational methods for solving Poisson equations. The primary components include:
+
+- A C++ implementation using the Conjugate Gradient method.
+- A Python script that leverages PyTorch to perform computations on both CPU and GPU.
+- A Jupyter Notebook that provides a detailed demonstration of solving Poisson equations.
+
+Each component is designed to offer a unique approach to solving Poisson equations, highlighting the versatility and efficiency of different computational techniques.
 
 ## Repository Contents
 
@@ -92,11 +97,3 @@ Contributions are welcome! Please fork this repository and submit pull requests 
 
 This project is licensed under the MIT License. See the `LICENSE` file for more details.
 
-## Acknowledgments
-
-- Any libraries or frameworks used
-- Inspiration or references to related work
-
----
-
-Feel free to customize this README further to better fit the specifics of your project. Let me know if you need any additional sections or modifications!
