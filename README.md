@@ -27,7 +27,7 @@ This file contains a C++ implementation of solving the Poisson equation using th
 
 - **How to Run:**
   ```sh
-  ./CGPoisson
+  ./CGPoisson $(INPUT_FILE)
   ```
 
 ### 2. `demo_pytorch.ipynb`
@@ -49,12 +49,13 @@ This Python script provides an implementation of solving Poisson equations using
 
 - **Key Features:**
   - Python implementation of numerical methods for solving Poisson equations
+  - Object-Oriented interface
   - Easy to modify and extend for different use cases
   - Includes test cases and example runs
 
 - **How to Run:**
   ```sh
-  python poisson.py
+  from poisson import Poisson2D
   ```
 
 ## Getting Started
