@@ -94,7 +94,3 @@ For the C++ component, ensure you have a C++ compiler like `g++`.
 
 Contributions are welcome! Please fork this repository and submit pull requests to contribute. Ensure your code follows the repository's coding standards and includes appropriate tests.
 
-## License
-
-This project is licensed under the MIT License. See the `LICENSE` file for more details.
-
