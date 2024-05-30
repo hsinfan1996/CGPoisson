@@ -88,7 +88,7 @@ For the C++ component, ensure you have a C++ compiler like `g++`.
 
 ### Running the Python Script
 1. Ensure all dependencies are installed.
-2. Import `poisson.py`.
+2. Import `poisson.py` as `from poisson import Poisson2D`.
 
 ## Contributing
 
