@@ -49,8 +49,8 @@ int main(int argc, char* argv[]){
     }
 
 
-    const unsigned int N=N_in-2, N_grid=N_grid_in;
-    double u[N_grid] {0}, source[N_grid] {0};
+    const int N=N_in-2, N_grid=N_grid_in;
+    double u[N_grid]={0}, source[N_grid]={0};
 
     for (int i=0; i<N_grid; i++){
         file_in >> source[i];
@@ -69,12 +69,11 @@ int main(int argc, char* argv[]){
     double err, err_max;
     int iters=0;
 
-    double Ad[N_grid] {0}, residual[N_grid] {0}, d[N_grid] {0};
+    //double Ad[N_grid] {0}, residual[N_grid] {0}, d[N_grid] {0};
 
     // MPI thingy
-
     if ( rank < N_rank - 1 ) {
-        const int N_row=N/N_rank;
+        const unsigned int N_row=N/N_rank;
         double u_MPI[(N_row+2)*(N+2)] {0}, source_MPI[N_row*(N+2)] {0};
         double boundary_u[N+2] {0}, boundary_d[N+2] {0};
         double Ad[N_row*(N+2)] {0}, residual[N_row*(N+2)] {0}, d[N_row*(N+2)] {0};
@@ -82,11 +81,11 @@ int main(int argc, char* argv[]){
         for(int i=0; i<N_row+2; i++){
             for(int j=0; j<N+2; j++){
                 u_MPI[i*(N+2)+j]=u[(rank*N_row+i)*(N+2)+j];
-                if (i=0){
-                    boundary_d[j]=u_MPI[(i)*(N+2)+j];
-                }
-                if (i=N_row+1){
+                if (i==0){
                     boundary_u[j]=u_MPI[(i)*(N+2)+j];
+                }
+                if (i==N_row+1){
+                    boundary_d[j]=u_MPI[(i)*(N+2)+j];
                 }
             }
         }
@@ -95,21 +94,20 @@ int main(int argc, char* argv[]){
                 source_MPI[i*(N+2)+j]=source[(rank*N_row+i+1)*(N+2)+j];
             }
         }
-    // initial residual = b-Ax
-    # pragma omp parallel for collapse(2)
-    for(int i=1; i<N_row+1; i++){
-        for(int j=1; j<N+1; j++){
-            residual[i*(N_row+2)+j] = source_MPI[i*(N+2)+j]
-                                  -(u_MPI[(i+1)*(N+2)+j]
-                                    +u_MPI[(i-1)*(N+2)+j]
-                                    +u_MPI[i*(N+2)+j+1]
-                                    +u_MPI[i*(N+2)+j-1]
-                                    -4*u_MPI[i*(N+2)+j])*N*N/L/L;
-            d[i*(N+2)+j] = residual[i*(N+2)+j];
+
+        // initial residual = b-Ax
+        # pragma omp parallel for collapse(2)
+        for(int i=1; i<N_row+1; i++){
+            for(int j=1; j<N+1; j++){
+                residual[i*(N+2)+j] = source_MPI[i*(N+2)+j]
+                                      -(u_MPI[(i+1)*(N+2)+j]
+                                        +u_MPI[(i-1)*(N+2)+j]
+                                        +u_MPI[i*(N+2)+j+1]
+                                        +u_MPI[i*(N+2)+j-1]
+                                        -4*u_MPI[i*(N+2)+j])*N*N/L/L;
+                d[i*(N+2)+j] = residual[i*(N+2)+j];
+            }
         }
-    }
-
-
         do{
             double alpha=0, alpha_num=0, alpha_den=0;
             double beta=0, beta_num=0;
@@ -120,7 +118,7 @@ int main(int argc, char* argv[]){
             {
             // compute Ad = A(d)
             # pragma omp for collapse(2)
-            for(int i=1; i<N+1; i++){
+            for(int i=1; i<N_row+1; i++){
                 for(int j=1; j<N+1; j++){
                     Ad[i*(N+2)+j] = (d[(i+1)*(N+2)+j]
                                      +d[(i-1)*(N+2)+j]
@@ -131,7 +129,7 @@ int main(int argc, char* argv[]){
             }
             // alpha = r*r/d*Ad
             # pragma omp for collapse(2) reduction(+:alpha_num, alpha_den)
-            for(int i=1; i<N+1; i++){
+            for(int i=1; i<N_row+1; i++){
                 for(int j=1; j<N+1; j++){
                     alpha_num += residual[i*(N+2)+j]*residual[i*(N+2)+j];
                     alpha_den += d[i*(N+2)+j]*Ad[i*(N+2)+j];
@@ -142,9 +140,9 @@ int main(int argc, char* argv[]){
 
 
             # pragma omp for collapse(2) reduction(+:beta_num)
-            for(int i=1; i<N+1; i++){
+            for(int i=1; i<N_row+1; i++){
                 for(int j=1; j<N+1; j++){
-                    u[i*(N+2)+j] += alpha*d[i*(N+2)+j];
+                    u_MPI[i*(N+2)+j] += alpha*d[i*(N+2)+j];
                     residual[i*(N+2)+j] -= alpha*Ad[i*(N+2)+j];
                     beta_num += residual[i*(N+2)+j]*residual[i*(N+2)+j];
                 }
@@ -153,7 +151,7 @@ int main(int argc, char* argv[]){
             beta = beta_num/alpha_num;
 
             # pragma omp for collapse(2) reduction(+:err) reduction(max:err_max)
-            for(int i=1; i<N+1; i++){
+            for(int i=1; i<N_row+1; i++){
                 for(int j=1; j<N+1; j++){
                     d[i*(N+2)+j] = residual[i*(N+2)+j] + beta*d[i*(N+2)+j];
                     err += fabs(residual[i*(N+2)+j]);
@@ -168,17 +166,18 @@ int main(int argc, char* argv[]){
     }
 
     else{
-        const int N_row=N%N_rank;
+        const unsigned int N_row=N%N_rank;
         double u_MPI[(N_row+2)*(N+2)] {0}, source_MPI[N_row*(N+2)] {0};
         double boundary_u[N+2] {0}, boundary_d[N+2] {0};
+        double Ad[N_row*(N+2)] {0}, residual[N_row*(N+2)] {0}, d[N_row*(N+2)] {0};
 
         for(int i=0; i<N_row+2; i++){
             for(int j=0; j<N+2; j++){
                 u_MPI[i*(N+2)+j]=u[(rank*N_row+i)*(N+2)+j];
-                if (i=0){
+                if (i==0){
                     boundary_d[j]=u_MPI[(i)*(N+2)+j];
                 }
-                if (i=N_row+1){
+                if (i==N_row+1){
                     boundary_u[j]=u_MPI[(i)*(N+2)+j];
                 }
             }
@@ -186,16 +185,81 @@ int main(int argc, char* argv[]){
         for(int i=0; i<N_row; i++){
             for(int j=1; j<N+1; j++){
                 source_MPI[i*(N+2)+j]=source[(rank*N_row+i+1)*(N+2)+j];
-                printf("%6e\n", source_MPI[i*(N+2)+j]);
             }
         }
 
+        // initial residual = b-Ax
+        # pragma omp parallel for collapse(2)
+        for(int i=1; i<N_row+1; i++){
+            for(int j=1; j<N+1; j++){
+                residual[i*(N+2)+j] = source_MPI[i*(N+2)+j]
+                                      -(u_MPI[(i+1)*(N+2)+j]
+                                        +u_MPI[(i-1)*(N+2)+j]
+                                        +u_MPI[i*(N+2)+j+1]
+                                        +u_MPI[i*(N+2)+j-1]
+                                        -4*u_MPI[i*(N+2)+j])*N*N/L/L;
+                d[i*(N+2)+j] = residual[i*(N+2)+j];
+            }
+        }
+        do{
+            double alpha=0, alpha_num=0, alpha_den=0;
+            double beta=0, beta_num=0;
+            err=0;
+            err_max=0;
+
+            # pragma omp parallel
+            {
+            // compute Ad = A(d)
+            # pragma omp for collapse(2)
+            for(int i=1; i<N_row+1; i++){
+                for(int j=1; j<N+1; j++){
+                    Ad[i*(N+2)+j] = (d[(i+1)*(N+2)+j]
+                                     +d[(i-1)*(N+2)+j]
+                                     +d[i*(N+2)+j+1]
+                                     +d[i*(N+2)+j-1]
+                                     -4*d[i*(N+2)+j])*N*N/L/L;
+                }
+            }
+            // alpha = r*r/d*Ad
+            # pragma omp for collapse(2) reduction(+:alpha_num, alpha_den)
+            for(int i=1; i<N_row+1; i++){
+                for(int j=1; j<N+1; j++){
+                    alpha_num += residual[i*(N+2)+j]*residual[i*(N+2)+j];
+                    alpha_den += d[i*(N+2)+j]*Ad[i*(N+2)+j];
+                }
+            }
+            # pragma omp single
+            alpha = alpha_den!=0 ? alpha_num / alpha_den : 0;
 
 
+            # pragma omp for collapse(2) reduction(+:beta_num)
+            for(int i=1; i<N_row+1; i++){
+                for(int j=1; j<N+1; j++){
+                    u_MPI[i*(N+2)+j] += alpha*d[i*(N+2)+j];
+                    residual[i*(N+2)+j] -= alpha*Ad[i*(N+2)+j];
+                    beta_num += residual[i*(N+2)+j]*residual[i*(N+2)+j];
+                }
+            }
+            # pragma omp single
+            beta = beta_num/alpha_num;
+
+            # pragma omp for collapse(2) reduction(+:err) reduction(max:err_max)
+            for(int i=1; i<N_row+1; i++){
+                for(int j=1; j<N+1; j++){
+                    d[i*(N+2)+j] = residual[i*(N+2)+j] + beta*d[i*(N+2)+j];
+                    err += fabs(residual[i*(N+2)+j]);
+                    err_max = fabs(residual[i*(N+2)+j]) > err_max ? fabs(residual[i*(N+2)+j]) : err_max;
+                }
+            }
+            }
+            err /= N*N;
+            iters++;
+
+        }while(err>terminate);
 
     }
 
-
+    /*
     // initial residual = b-Ax
     # pragma omp parallel for collapse(2)
     for(int i=1; i<N+1; i++){
@@ -266,7 +330,7 @@ int main(int argc, char* argv[]){
         iters++;
 
     }while(err>terminate);
-
+    */
 
 
     
