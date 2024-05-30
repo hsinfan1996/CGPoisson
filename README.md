@@ -19,7 +19,7 @@ This file contains a C++ implementation of solving the Poisson equation using th
   - Implementation of the Conjugate Gradient method
   - Efficient handling of large sparse matrices
   - Example usage of the solver
-  
+
 - **How to Compile:**
   ```sh
   g++ -o CGPoisson CGPoisson.cpp
@@ -88,7 +88,7 @@ For the C++ component, ensure you have a C++ compiler like `g++`.
 
 ### Running the Python Script
 1. Ensure all dependencies are installed.
-2. Run the `poisson.py` script.
+2. Import `poisson.py`.
 
 ## Contributing
 
