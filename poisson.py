@@ -27,9 +27,9 @@ class PDE:
         self._set_boundary_cond(BC=BC)
         self._set_source(source=source)
         if self.scheme == "CG":
-            self._numpy_to_torch(self.x)
-            self._numpy_to_torch(self.u)
-            self._numpy_to_torch(self.source)
+            self._numpy_to_torch("x")
+            self._numpy_to_torch("u")
+            self._numpy_to_torch("source")
 
         self.steps = 0
         self.err = 1.
@@ -42,10 +42,10 @@ class PDE:
                 self._evolve(print_err=print_err, **kwargs)
 
         if self.scheme == "CG":
-            self._torch_to_numpy(self.x)
-            self._torch_to_numpy(self.u)
-            self._torch_to_numpy(self.source)
-            self._torch_to_numpy(self.err)
+            self._torch_to_numpy("x")
+            self._torch_to_numpy("u")
+            self._torch_to_numpy("source")
+            self._torch_to_numpy("err")
 
 
 class Poisson2D(PDE):
@@ -75,11 +75,11 @@ class Poisson2D(PDE):
 
 
     def _numpy_to_torch(self, quantity):
-        quantity = torch.from_numpy(quantity).to(self.device)
+        setattr(self, quantity, torch.from_numpy(getattr(self, quantity)).to(self.device))
 
 
     def _torch_to_numpy(self, quantity):
-        quantity = quantity.cpu().numpy()
+        setattr(self, quantity, getattr(self, quantity).cpu().numpy())
 
 
     def _set_boundary_cond(self, BC):
