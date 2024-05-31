@@ -134,7 +134,8 @@ int main(int argc, char* argv[]){
         iters++;
 
     }while(err>terminate);
-    printf("%d iterations, avg residual=%6e, max residual=%6e\n", iters, err, err_max);
+    //printf("%d iterations, avg residual=%6e, max residual=%6e\n", iters, err, err_max);
+    cout<<iters<<" iterations "<<" avg residual "<<err<<" max residual "<<err_max<<endl;
 
     FILE *file_out;
     std::string buf("output_");
