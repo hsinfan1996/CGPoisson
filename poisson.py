@@ -1,9 +1,8 @@
-#!/usr/bin/env python
-# coding: utf-8
 import warnings
-import numpy as np
-import matplotlib.pyplot as plt
+
 from matplotlib import animation
+import matplotlib.pyplot as plt
+import numpy as np
 import torch
 
 class PDE:
@@ -15,21 +14,24 @@ class PDE:
             print(self.err)
 
 
-    def run(self, scheme, BC, source=None, steps=None, terminate=1e-15, print_err=False, **kwargs):
+    def run(self, scheme, BC, source=None, steps=None, terminate=1e-12, print_err=False, **kwargs):
         """
-        For Advection:
-        steps: number of steps to iterate
-        scheme: "upwind" or "Lax-Wendroff" (Default: "Lax-Wendroff")
-        IC: initial condition
+        scheme (str): Can be "Jacobi", "Gauss-Seidel", "SOR", "CG", "CG-CPU".
+        BC (N+2 by N+2 np.ndarray): Boundary condition
+        source (N by N np.ndarray): Source term. Optional (Default: None)
+        steps (int): Maximum number of steps to iteraate, Optional (Default: None)
+        terminate (float): Terminate iteration when average residual is less than this number. Optional (Default: 1e-12)
+        print_err (bool): Print out residual for every step. Optional (Default: False)
+        kwargs (dict): Additional keyword arguments to be passed to `_scheme()`
         """
         self._set_scheme(scheme)
 
         self._set_boundary_cond(BC=BC)
         self._set_source(source=source)
         if self.scheme == "CG":
-            self.x = torch.from_numpy(self.x).to(self.device)
-            self.u = torch.from_numpy(self.u).to(self.device)
-            self.source = torch.from_numpy(self.source).to(self.device)
+            self._numpy_to_torch("x")
+            self._numpy_to_torch("u")
+            self._numpy_to_torch("source")
 
         self.steps = 0
         self.err = 1.
@@ -42,14 +44,19 @@ class PDE:
                 self._evolve(print_err=print_err, **kwargs)
 
         if self.scheme == "CG":
-            self.x = self.x.cpu().numpy()
-            self.u = self.u.cpu().numpy()
-            self.source = self.source.cpu().numpy()
-            self.err = self.err.cpu().numpy()
+            self._torch_to_numpy("x")
+            self._torch_to_numpy("u")
+            self._torch_to_numpy("source")
+            self._torch_to_numpy("err")
 
 
 class Poisson2D(PDE):
     def __init__(self, L=1.0, N=100, device="cuda"):
+        '''
+        L (float): Domain length. Optional (Default: 1.0)
+        N (int): Spatial resolution in each dimension. Optional (Default: 100)
+        device (str): Can be "cuda" or "cpu". Only effective when using CG with PyTorch. Optional (Default: "cuda")
+        '''
         self.name = "Poisson2D"
         self.L = L
         self.N = N
@@ -74,24 +81,21 @@ class Poisson2D(PDE):
             self.device = "cpu"
 
 
+    def _numpy_to_torch(self, quantity):
+        setattr(self, quantity, torch.from_numpy(getattr(self, quantity)).to(self.device))
+
+
+    def _torch_to_numpy(self, quantity):
+        setattr(self, quantity, getattr(self, quantity).cpu().numpy())
+
+
     def _set_boundary_cond(self, BC):
-        '''
-        if self.device == "cuda":
-            self.u = torch.from_numpy(BC).to(self.device)
-            self.u[1:-1, 1:-1] = torch.zeros((self.N, self.N), dtype=torch.float, device=self.device)
-        else:
-        '''
         self.u = BC
         self.u[1:-1, 1:-1] = np.zeros((self.N, self.N))
 
 
     def _set_source(self, source):
         if source is not None:
-            '''
-            if self.device == "cuda":
-                self.source[1:-1, 1:-1] = torch.from_numpy(source).to(self.device)
-            else:
-            '''
             self.source[1:-1, 1:-1] = source
 
 
