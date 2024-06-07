@@ -63,8 +63,8 @@ class Poisson2D(PDE):
 
         self._set_device(device)
 
-        self.x, self.dx = np.linspace(0, self.L, self.N, endpoint=False, retstep=True)
-        self.x += self.dx / 2
+        self.x, self.dx = np.linspace(0, self.L, self.N+2, retstep=True)
+        self.x = self.x[1:-1]
 
         self.u = np.zeros((self.N+2, self.N+2), dtype=float)
         self.source = np.zeros((self.N+2, self.N+2), dtype=float)
