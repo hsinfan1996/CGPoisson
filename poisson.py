@@ -14,7 +14,7 @@ class PDE:
             print(self.err)
 
 
-    def run(self, scheme, BC, source=None, steps=None, terminate=1e-12, print_err=False, **kwargs):
+    def run(self, scheme, BC, source=None, steps=None, terminate=1e-15, print_err=False, **kwargs):
         """
         scheme (str): Can be "Jacobi", "Gauss-Seidel", "SOR", "CG", "CG-CPU".
         BC (N+2 by N+2 np.ndarray): Boundary condition
@@ -143,14 +143,22 @@ class Poisson2D(PDE):
         self.err = np.abs(self.u[1:-1, 1:-1] - u_old[1:-1, 1:-1]).sum() / self.N**2
 
 
-    def _scheme_SOR(self, w=1.85):
-        u_old = self.u.copy()
+    def _scheme_SOR(self, w=1):
+        self.u_old = np.copy(self.u)
+        residual = np.zeros_like(self.u, dtype=float)
+
         for i in range(1, self.N+1):
             for j in range(1, self.N+1):
-                self.u[i, j] = (1 - w) * u_old[i, j] + w/4 * (self.u[i+1, j] + self.u[i-1, j] +
-                                                             self.u[i, j+1] + self.u[i, j-1] -
-                                                             self.source[i, j] * self.dx**2)
-        self.err = np.abs(self.u[1:-1, 1:-1] - u_old[1:-1, 1:-1]).sum() / self.N**2
+                residual[i, j] = (self.u[i+1, j]
+                                  +self.u[i-1, j]
+                                  +self.u[i, j+1]
+                                  +self.u[i, j-1]
+                                  -self.source[i, j]*self.dx**2
+                                  -4*self.u[i, j])/4
+
+                self.u[i, j] = self.u_old[i, j] + w*residual[i, j]
+
+        self.err = np.abs(residual[1:-1, 1:-1]/self.u[1:-1, 1:-1]).sum()/self.N**2
 
 
     def _scheme_CG(self):
