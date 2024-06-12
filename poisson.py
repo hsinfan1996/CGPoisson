@@ -3,7 +3,9 @@ import warnings
 from matplotlib import animation
 import matplotlib.pyplot as plt
 import numpy as np
+from mpi4py import MPI
 import torch
+
 
 class PDE:
     def _evolve(self,*, print_err, **kwargs):
@@ -74,11 +76,21 @@ class Poisson2D(PDE):
         if device=="cuda":
             if torch.cuda.is_available():
                 self.device = "cuda"
+                self.blocks = (self.N + 3) // 4
+                self.threads = 4
+                print(f"CUDA blocks set to: {self.blocks}, threads set to: {self.threads}")
             else:
                 warnings.warn("Fall back to cpu for PyTorch")
                 self.device = "cpu"
+                torch.set_num_threads(1)
+        elif device == "cpu_1thread":
+            self.device = "cpu"
+            torch.set_num_threads(1)
+            print(f"Number of threads set to: {torch.get_num_threads()}")
         else:
             self.device = "cpu"
+            torch.set_num_threads(4)
+            print(f"Number of threads set to: {torch.get_num_threads()}")
 
 
     def _numpy_to_torch(self, quantity):
@@ -116,29 +128,29 @@ class Poisson2D(PDE):
              self._set_device("cpu")
              self.scheme = "CG-CPU"
              self._scheme = self._scheme_CG_CPU
+         elif scheme == 'CG-MPI':
+             self.scheme = "CG-MPI"
+             self._scheme = self._scheme_CG_mpi
          else:
              raise ValueError("No scheme found")
 
 
     def _scheme_Jacobi(self):
         u_old = self.u.copy()
-        self.u[1:-1, 1:-1] = (u_old[2:, 1:-1] + u_old[:-2, 1:-1] +
-                               u_old[1:-1, 2:] + u_old[1:-1, :-2] -
-                               self.source[1:-1, 1:-1] * self.dx**2) / 4
+        self.u[1:-1, 1:-1] = (u_old[2:, 1:-1] + u_old[:-2, 1:-1]
+                            + u_old[1:-1, 2:] + u_old[1:-1, :-2]
+                            - self.source[1:-1, 1:-1] * self.dx**2) / 4
 
         self.err = np.abs(self.u[1:-1, 1:-1] - u_old[1:-1, 1:-1]).sum() / self.N**2
-
 
     def _scheme_GS(self):
         u_old = self.u.copy()
 
         for i in range(1, self.N+1):
             for j in range(1, self.N+1):
-
                 self.u[i, j] = (self.u[i+1, j] + self.u[i-1, j] +
                                 self.u[i, j+1] + self.u[i, j-1] -
                                 self.source[i, j] * self.dx**2) / 4
-
 
         self.err = np.abs(self.u[1:-1, 1:-1] - u_old[1:-1, 1:-1]).sum() / self.N**2
 
@@ -219,3 +231,62 @@ class Poisson2D(PDE):
 
         # Check for convergence
         self.err = np.abs(self.r[1:-1, 1:-1]).sum()/self.N**2
+
+
+    def _scheme_CG_mpi(self):
+        comm = MPI.COMM_WORLD
+        rank = comm.Get_rank()
+        size = comm.Get_size()
+
+        # Define A for calculation
+        def A(u):
+            return (u[2:, 1:-1] + u[:-2, 1:-1] + u[1:-1, 2:] + u[1:-1, :-2] - 4 * u[1:-1, 1:-1]) / self.dx**2
+
+        # Initialize residuals and direction vectors
+        if self.steps == 0:
+            self.r = self.source.copy()
+            self.r[1:-1, 1:-1] -= A(self.u)
+            self.d = self.r.copy()
+
+        # Split data for each process
+        u_local = np.array_split(self.u, size, axis=0)[rank]
+        d_local = np.array_split(self.d, size, axis=0)[rank]
+        r_local = np.array_split(self.r, size, axis=0)[rank]
+
+        Ad_local = np.zeros_like(u_local)
+        Ad_local[1:-1, 1:-1] = A(d_local)
+
+        # Calculate alpha
+        alpha_num_local = np.sum(r_local[1:-1, 1:-1]**2)
+        alpha_den_local = np.sum(d_local[1:-1, 1:-1] * Ad_local[1:-1, 1:-1])
+
+        alpha_num = comm.allreduce(alpha_num_local, op=MPI.SUM)
+        alpha_den = comm.allreduce(alpha_den_local, op=MPI.SUM)
+        alpha = alpha_num / alpha_den if alpha_den != 0 else 0
+
+        # Update solution
+        u_local[1:-1, 1:-1] += alpha * d_local[1:-1, 1:-1]
+
+        # Calculate new residual
+        r_local[1:-1, 1:-1] -= alpha * Ad_local[1:-1, 1:-1]
+
+        # Calculate beta
+        beta_num_local = np.sum(r_local[1:-1, 1:-1]**2)
+        beta_num = comm.allreduce(beta_num_local, op=MPI.SUM)
+        beta_den = alpha_num
+        beta = beta_num / beta_den if beta_den != 0 else 0
+
+        # Update direction vector
+        d_local[1:-1, 1:-1] = r_local[1:-1, 1:-1] + beta * d_local[1:-1, 1:-1]
+
+        # Gather the updated local arrays
+        u_parts = comm.gather(u_local, root=0)
+        r_parts = comm.gather(r_local, root=0)
+        d_parts = comm.gather(d_local, root=0)
+
+        if rank == 0:
+            self.u = np.vstack(u_parts)
+            self.r = np.vstack(r_parts)
+            self.d = np.vstack(d_parts)
+
+        self.err = np.abs(self.r[1:-1, 1:-1]).sum() / self.N**2
