@@ -289,4 +289,4 @@ class Poisson2D(PDE):
             self.r = np.vstack(r_parts)
             self.d = np.vstack(d_parts)
 
-        self.err = np.sum(self.r[1:-1, 1:-1]) / self.N**2
+        self.err = np.abs(self.r[1:-1, 1:-1]).sum() / self.N**2
